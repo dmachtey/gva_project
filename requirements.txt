@@ -1,0 +1,14 @@
+# GVA Control de Emergencia — Dependencias
+# Instalar con: pip install -r requirements.txt
+
+# ── Testing ──────────────────────────────
+pytest==8.0.0
+pytest-asyncio==0.21.0
+
+# ── MQTT (producción) ─────────────────────
+# Descomentar para usar broker real:
+# paho-mqtt>=1.6.1
+# aiomqtt>=1.0.0
+
+# ── Tipado y utilidades ───────────────────
+# (stdlib solo: asyncio, dataclasses, enum, logging, json)

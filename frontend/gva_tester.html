@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GVA · Test Runner</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;700;800&display=swap');
+
+:root {
+  --bg:         #07080a;
+  --surface:    #0d0f12;
+  --surface2:   #111417;
+  --border:     #1c2028;
+  --border2:    #252b35;
+  --pass:       #00e5a0;
+  --fail:       #ff4055;
+  --pending:    #f5a623;
+  --skip:       #4a5568;
+  --accent:     #5b8af0;
+  --accent2:    #a78bfa;
+  --text:       #dde3ed;
+  --text-dim:   #5a6578;
+  --text-mid:   #8a96a8;
+  --mono:       'DM Mono', monospace;
+  --sans:       'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(91,138,240,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91,138,240,0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none; z-index: 0;
+}
+
+/* ── HEADER ── */
+header {
+  position: relative; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex; align-items: center; gap: 14px;
+}
+.brand-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem;
+}
+.brand-text { font-family: var(--sans); font-weight: 800; font-size: 1rem; letter-spacing: 0.05em; }
+.brand-text span { color: var(--text-dim); font-weight: 400; }
+.header-meta { font-size: 0.65rem; color: var(--text-dim); text-align: right; line-height: 1.8; }
+.header-meta b { color: var(--accent); }
+
+/* ── SCOREBOARD ── */
+.scoreboard {
+  position: relative; z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+.score-cell {
+  padding: 14px 20px;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.score-cell:last-child { border-right: none; }
+.score-label { font-size: 0.58rem; letter-spacing: 0.25em; text-transform: uppercase; color: var(--text-dim); }
+.score-value { font-family: var(--sans); font-weight: 800; font-size: 1.8rem; line-height: 1; }
+.score-value.pass    { color: var(--pass); }
+.score-value.fail    { color: var(--fail); }
+.score-value.pending { color: var(--pending); }
+.score-value.total   { color: var(--text); }
+.score-value.time    { color: var(--accent); font-size: 1.4rem; }
+
+/* Progress bar */
+.progress-bar-wrap {
+  position: relative; z-index: 10;
+  height: 3px; background: var(--border);
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--pass), var(--accent));
+  width: 0%; transition: width 0.3s ease;
+}
+
+/* ── MAIN LAYOUT ── */
+main {
+  position: relative; z-index: 10;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  height: calc(100vh - 120px);
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+}
+.sidebar-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sidebar-title { font-size: 0.62rem; letter-spacing: 0.25em; text-transform: uppercase; color: var(--text-dim); }
+.run-btn {
+  font-family: var(--sans); font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border: none; color: #fff;
+  padding: 6px 16px; border-radius: 4px;
+  cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+}
+.run-btn:hover { opacity: 0.85; }
+.run-btn:active { transform: scale(0.96); }
+.run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.suite-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+.suite-list::-webkit-scrollbar { width: 4px; }
+.suite-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.suite-group { margin-bottom: 2px; }
+.suite-name {
+  padding: 8px 16px;
+  font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--text-mid);
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+}
+.suite-name:hover { color: var(--text); }
+.suite-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border2); flex-shrink: 0;
+  transition: background 0.3s;
+}
+.suite-dot.pass { background: var(--pass); box-shadow: 0 0 6px var(--pass); }
+.suite-dot.fail { background: var(--fail); box-shadow: 0 0 6px var(--fail); }
+.suite-dot.running { background: var(--pending); animation: pulse 0.8s ease-in-out infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.test-item {
+  padding: 6px 16px 6px 32px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.68rem; color: var(--text-dim);
+  cursor: pointer; transition: background 0.1s;
+  border-left: 2px solid transparent;
+}
+.test-item:hover { background: rgba(255,255,255,0.02); color: var(--text); }
+.test-item.active { border-left-color: var(--accent); background: rgba(91,138,240,0.06); color: var(--text); }
+.test-item.pass { color: var(--pass); }
+.test-item.fail { color: var(--fail); border-left-color: var(--fail); background: rgba(255,64,85,0.04); }
+.test-item.running { color: var(--pending); }
+.test-icon { font-size: 0.7rem; flex-shrink: 0; width: 14px; text-align: center; }
+
+/* ── DETAIL PANEL ── */
+.detail-panel {
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+.detail-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.detail-title { font-family: var(--sans); font-weight: 700; font-size: 0.85rem; color: var(--text); }
+.detail-badge {
+  font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 20px;
+}
+.detail-badge.pass { background: rgba(0,229,160,0.12); color: var(--pass); border: 1px solid rgba(0,229,160,0.25); }
+.detail-badge.fail { background: rgba(255,64,85,0.12); color: var(--fail); border: 1px solid rgba(255,64,85,0.25); }
+.detail-badge.pending { background: rgba(245,166,35,0.12); color: var(--pending); border: 1px solid rgba(245,166,35,0.25); }
+.detail-badge.idle { background: rgba(90,101,120,0.15); color: var(--text-dim); border: 1px solid var(--border); }
+
+.detail-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.detail-body::-webkit-scrollbar { width: 4px; }
+.detail-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* Test detail sections */
+.detail-section { display: flex; flex-direction: column; gap: 6px; }
+.detail-section-label { font-size: 0.58rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--text-dim); }
+.detail-section-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 0.72rem;
+  line-height: 1.7;
+  color: var(--text-mid);
+}
+.detail-section-content code {
+  background: rgba(91,138,240,0.1);
+  color: var(--accent);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+}
+
+/* Assertion rows */
+.assertion-list { display: flex; flex-direction: column; gap: 4px; }
+.assertion {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  font-size: 0.68rem;
+}
+.assertion.pass { border-color: rgba(0,229,160,0.2); background: rgba(0,229,160,0.04); }
+.assertion.fail { border-color: rgba(255,64,85,0.25); background: rgba(255,64,85,0.06); }
+.assertion.pending { border-color: rgba(245,166,35,0.2); }
+.assertion-icon { flex-shrink: 0; margin-top: 1px; }
+.assertion-text { color: var(--text-mid); line-height: 1.5; }
+.assertion-text .expect { color: var(--accent2); }
+.assertion-text .received { color: var(--fail); }
+.assertion-text .pass-val { color: var(--pass); }
+
+/* Error block */
+.error-block {
+  background: rgba(255,64,85,0.06);
+  border: 1px solid rgba(255,64,85,0.2);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 0.68rem;
+  color: var(--fail);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  font-family: var(--mono);
+}
+
+/* Timing */
+.timing-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(91,138,240,0.08);
+  border: 1px solid rgba(91,138,240,0.2);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.62rem;
+  color: var(--accent);
+}
+
+/* Welcome screen */
+.welcome {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px; color: var(--text-dim);
+  text-align: center;
+}
+.welcome-icon { font-size: 3rem; opacity: 0.3; }
+.welcome-title { font-family: var(--sans); font-size: 1rem; font-weight: 700; color: var(--text-mid); }
+.welcome-sub { font-size: 0.68rem; line-height: 1.7; max-width: 280px; }
+
+/* DOM preview mini section */
+.dom-preview {
+  background: #090b0e;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.62rem;
+  color: #667;
+  line-height: 1.6;
+  font-family: var(--mono);
+  overflow-x: auto;
+}
+.dom-preview .tag { color: #5b8af0; }
+.dom-preview .attr { color: #a78bfa; }
+.dom-preview .val { color: #f5a623; }
+
+/* Run all animation */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinning { display: inline-block; animation: spin 0.7s linear infinite; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">⚗</div>
+    <div>
+      <div class="brand-text">GVA <span>·</span> TEST RUNNER</div>
+      <div style="font-size:0.58rem;color:var(--text-dim);letter-spacing:0.15em">UNIT TESTING · CLEAN ARCHITECTURE</div>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div>Vitest <b>v1.0</b> · jsdom <b>v24</b> (emulado en browser)</div>
+    <div id="headerClock" style="color:var(--text-dim)">--:--:--</div>
+  </div>
+</header>
+
+<div class="scoreboard">
+  <div class="score-cell">
+    <div class="score-label">Total</div>
+    <div class="score-value total" id="scoreTotal">16</div>
+  </div>
+  <div class="score-cell">
+    <div class="score-label">Passed</div>
+    <div class="score-value pass" id="scorePass">0</div>
+  </div>
+  <div class="score-cell">
+    <div class="score-label">Failed</div>
+    <div class="score-value fail" id="scoreFail">0</div>
+  </div>
+  <div class="score-cell">
+    <div class="score-label">Pending</div>
+    <div class="score-value pending" id="scorePending">16</div>
+  </div>
+  <div class="score-cell">
+    <div class="score-label">Duration</div>
+    <div class="score-value time" id="scoreTime">--</div>
+  </div>
+</div>
+
+<div class="progress-bar-wrap">
+  <div class="progress-bar-fill" id="progressBar"></div>
+</div>
+
+<main>
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Test Suites</span>
+      <button class="run-btn" id="runAllBtn" onclick="Runner.runAll()">▶ Run All</button>
+    </div>
+    <div class="suite-list" id="suiteList">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- DETAIL -->
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+      <div class="detail-title" id="detailTitle">Seleccioná un test</div>
+      <div class="detail-badge idle" id="detailBadge">IDLE</div>
+    </div>
+    <div class="detail-body" id="detailBody">
+      <div class="welcome">
+        <div class="welcome-icon">🧪</div>
+        <div class="welcome-title">GVA Unit Test Runner</div>
+        <div class="welcome-sub">Presioná <strong style="color:var(--accent)">Run All</strong> para ejecutar los 16 casos de prueba, o hacé click en un test individual para ver sus detalles.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  MINI DOM SANDBOX — simula jsdom dentro del browser
+// ═══════════════════════════════════════════════════════════
+function createSandbox(html) {
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  return {
+    getElementById: (id) => container.querySelector('#' + id),
+    querySelector: (sel) => container.querySelector(sel),
+    querySelectorAll: (sel) => container.querySelectorAll(sel),
+    body: { innerHTML: html, _el: container }
+  };
+}
+
+// Fake timer system
+function createFakeTimers() {
+  const timers = [];
+  let realSetTimeout = window.setTimeout;
+  return {
+    setTimeout: (fn, ms) => {
+      const id = { fn, ms, done: false };
+      timers.push(id);
+      return id;
+    },
+    runAllTimers: async () => {
+      // Run all pending timers
+      for (const t of timers) {
+        if (!t.done) { t.done = true; await t.fn(); }
+      }
+      timers.length = 0;
+    },
+    restore: () => {}
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SYSTEM UNDER TEST — módulos GVA extraídos
+// ═══════════════════════════════════════════════════════════
+
+class MotorHAL {
+  constructor(doc, timers) {
+    this._doc = doc;
+    this._delay = (ms) => new Promise(res => timers ? timers.setTimeout(res, ms) : setTimeout(res, ms));
+  }
+  async cortarEnergia() {
+    await this._delay(350);
+    const led = this._doc.getElementById('led');
+    const ledStatus = this._doc.getElementById('ledStatus');
+    const metSpeed = this._doc.getElementById('metSpeed');
+    const metMotor = this._doc.getElementById('metMotor');
+    if (led) led.classList.add('off');
+    if (ledStatus) { ledStatus.classList.add('off'); ledStatus.textContent = 'DESCONECTADO'; }
+    if (metSpeed) metSpeed.textContent = '0.0 km/h';
+    if (metMotor) metMotor.textContent = 'INACTIVO';
+    return { status: 'OK', relay: 'OPEN', timestamp: new Date().toISOString() };
+  }
+}
+
+class StateManager {
+  constructor(doc, timers) {
+    this._doc = doc;
+    this.currentState = 'NORMAL';
+    this._delay = (ms) => new Promise(res => timers ? timers.setTimeout(res, ms) : setTimeout(res, ms));
+  }
+  async cambiarEstado(newState) {
+    await this._delay(300);
+    this.currentState = newState;
+    const display = this._doc.getElementById('stateDisplay');
+    if (display) {
+      display.textContent = newState;
+      if (newState === 'EMERGENCY_STOP') display.classList.add('emergency');
+      else display.classList.remove('emergency');
+    }
+    return { status: 'OK', state: newState };
+  }
+}
+
+class MQTTComm {
+  constructor(logger, timers) {
+    this._logger = logger;
+    this._delay = (ms) => new Promise(res => timers ? timers.setTimeout(res, ms) : setTimeout(res, ms));
+  }
+  async publish(topic, payload) {
+    this._logger('[MQTT] Conectando...');
+    await this._delay(400);
+    const packet = JSON.stringify({ ...payload, ts: new Date().toISOString(), unit: 'GVA-07', sector: 'ALMACÉN-3' });
+    this._logger('[MQTT] PUBLISH → ' + topic);
+    this._logger('[MQTT] ACK recibido');
+    return { status: 'OK', topic, packet };
+  }
+}
+
+class SafetyOrchestrator {
+  constructor(hal, state, mqtt, doc, timers) {
+    this._hal = hal; this._state = state; this._mqtt = mqtt; this._doc = doc;
+    this.running = false;
+    this._delay = (ms) => new Promise(res => timers ? timers.setTimeout(res, ms) : setTimeout(res, ms));
+  }
+  async trigger() {
+    if (this.running) return;
+    this.running = true;
+    const btn = this._doc.getElementById('btnStop');
+    if (btn) btn.disabled = true;
+    const halResult = await this._hal.cortarEnergia();
+    await this._delay(200);
+    const stateResult = await this._state.cambiarEstado('EMERGENCY_STOP');
+    await this._delay(200);
+    await this._mqtt.publish('gva/07/safety/emergency', {
+      event: 'EMERGENCY_STOP', trigger: 'MANUAL_BUTTON',
+      halStatus: halResult.relay, state: stateResult.state
+    });
+    await this._delay(300);
+    const resetBtn = this._doc.getElementById('btnReset');
+    if (resetBtn) resetBtn.classList.add('visible');
+    if (btn) btn.classList.remove('pressed');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ASSERTION ENGINE
+// ═══════════════════════════════════════════════════════════
+class Assertion {
+  constructor() { this.results = []; }
+
+  expect(received) {
+    const self = this;
+    return {
+      toBe(expected) {
+        const pass = received === expected;
+        self.results.push({
+          pass, type: 'toBe',
+          desc: pass
+            ? `expect(<span class="pass-val">${JSON.stringify(received)}</span>).toBe(<span class="pass-val">${JSON.stringify(expected)}</span>)`
+            : `expect(<span class="expect">${JSON.stringify(received)}</span>).toBe(<span class="received">${JSON.stringify(expected)}</span>)`
+        });
+        if (!pass) throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(received)}`);
+      },
+      toEqual(expected) {
+        const exp = JSON.stringify(expected);
+        const rec = JSON.stringify(received);
+        const pass = exp === rec;
+        self.results.push({
+          pass, type: 'toEqual',
+          desc: pass
+            ? `expect(<span class="pass-val">${rec}</span>).toEqual(<span class="pass-val">${exp}</span>)`
+            : `expect(<span class="expect">${rec}</span>).toEqual(<span class="received">${exp}</span>)`
+        });
+        if (!pass) throw new Error(`Expected ${exp}, received ${rec}`);
+      },
+      toHaveBeenCalledTimes(n) {
+        const count = received._callCount || 0;
+        const pass = count === n;
+        self.results.push({
+          pass, type: 'toHaveBeenCalledTimes',
+          desc: pass
+            ? `mockFn called <span class="pass-val">${count}</span> times (expected ${n})`
+            : `mockFn called <span class="expect">${count}</span> times (expected <span class="received">${n}</span>)`
+        });
+        if (!pass) throw new Error(`Expected ${n} calls, got ${count}`);
+      }
+    };
+  }
+}
+
+function createMockFn(impl) {
+  let count = 0;
+  const fn = async (...args) => { count++; return impl ? impl(...args) : undefined; };
+  Object.defineProperty(fn, '_callCount', { get: () => count });
+  return fn;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TEST SUITE DEFINITIONS
+// ═══════════════════════════════════════════════════════════
+const SUITES = [
+  {
+    id: 'hal', name: 'MotorHAL',
+    description: 'Hardware Abstraction Layer · Capa física del relé de potencia',
+    domHtml: `<div id="led"></div><div id="ledStatus">CONECTADO</div><div id="metSpeed">12.4 km/h</div><div id="metMotor">ACTIVO</div>`,
+    tests: [
+      {
+        id: 'TC-HAL-01',
+        name: 'LED recibe clase .off al cortar energía',
+        precondition: 'DOM con #led sin clase .off',
+        action: 'Llamar a cortarEnergia() y resolver timers',
+        expected: 'document.getElementById("led").classList.contains("off") === true',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const hal = new MotorHAL(doc, timers);
+          const p = hal.cortarEnergia();
+          await timers.runAllTimers();
+          await p;
+          a.expect(doc.getElementById('led').classList.contains('off')).toBe(true);
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-HAL-02',
+        name: 'ledStatus cambia a "DESCONECTADO"',
+        precondition: '#ledStatus con texto "CONECTADO"',
+        action: 'Llamar a cortarEnergia() y resolver timers',
+        expected: 'ledStatus.textContent === "DESCONECTADO"',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const hal = new MotorHAL(doc, timers);
+          const p = hal.cortarEnergia();
+          await timers.runAllTimers();
+          await p;
+          a.expect(doc.getElementById('ledStatus').textContent).toBe('DESCONECTADO');
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-HAL-03',
+        name: 'Retorna { status: "OK", relay: "OPEN" }',
+        precondition: 'Cualquier estado inicial',
+        action: 'Llamar a cortarEnergia() y resolver timers',
+        expected: 'result.status === "OK" && result.relay === "OPEN"',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const hal = new MotorHAL(doc, timers);
+          const p = hal.cortarEnergia();
+          await timers.runAllTimers();
+          const result = await p;
+          a.expect(result.status).toBe('OK');
+          a.expect(result.relay).toBe('OPEN');
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-HAL-04',
+        name: 'Velocidad se actualiza a "0.0 km/h"',
+        precondition: '#metSpeed con valor "12.4 km/h"',
+        action: 'Llamar a cortarEnergia() y resolver timers',
+        expected: 'metSpeed.textContent === "0.0 km/h"',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const hal = new MotorHAL(doc, timers);
+          const p = hal.cortarEnergia();
+          await timers.runAllTimers();
+          await p;
+          a.expect(doc.getElementById('metSpeed').textContent).toBe('0.0 km/h');
+          return a.results;
+        }
+      }
+    ]
+  },
+  {
+    id: 'state', name: 'StateManager',
+    description: 'Capa de dominio · Máquina de estados del sistema',
+    domHtml: `<div id="stateDisplay">NORMAL</div>`,
+    tests: [
+      {
+        id: 'TC-STATE-01',
+        name: 'Estado inicial es "NORMAL"',
+        precondition: 'StateManager recién instanciado',
+        action: 'Leer manager.currentState',
+        expected: 'currentState === "NORMAL"',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const manager = new StateManager(doc, timers);
+          a.expect(manager.currentState).toBe('NORMAL');
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-STATE-02',
+        name: 'Agrega clase .emergency en EMERGENCY_STOP',
+        precondition: 'Estado en NORMAL',
+        action: 'Llamar a cambiarEstado("EMERGENCY_STOP")',
+        expected: 'stateDisplay.classList.contains("emergency") === true',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const manager = new StateManager(doc, timers);
+          const p = manager.cambiarEstado('EMERGENCY_STOP');
+          await timers.runAllTimers();
+          await p;
+          a.expect(doc.getElementById('stateDisplay').classList.contains('emergency')).toBe(true);
+          a.expect(doc.getElementById('stateDisplay').textContent).toBe('EMERGENCY_STOP');
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-STATE-03',
+        name: 'Remueve .emergency al restablecer a NORMAL',
+        precondition: 'Estado en EMERGENCY_STOP',
+        action: 'Llamar a cambiarEstado("NORMAL")',
+        expected: 'stateDisplay.classList.contains("emergency") === false',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const manager = new StateManager(doc, timers);
+          let p = manager.cambiarEstado('EMERGENCY_STOP');
+          await timers.runAllTimers(); await p;
+          p = manager.cambiarEstado('NORMAL');
+          await timers.runAllTimers(); await p;
+          a.expect(doc.getElementById('stateDisplay').classList.contains('emergency')).toBe(false);
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-STATE-04',
+        name: 'Retorna { status: "OK", state: "EMERGENCY_STOP" }',
+        precondition: 'Cualquier estado',
+        action: 'Llamar a cambiarEstado("EMERGENCY_STOP")',
+        expected: 'result deepEquals { status: "OK", state: "EMERGENCY_STOP" }',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const manager = new StateManager(doc, timers);
+          const p = manager.cambiarEstado('EMERGENCY_STOP');
+          await timers.runAllTimers();
+          const result = await p;
+          a.expect(result).toEqual({ status: 'OK', state: 'EMERGENCY_STOP' });
+          return a.results;
+        }
+      }
+    ]
+  },
+  {
+    id: 'mqtt', name: 'MQTTComm',
+    description: 'Capa de infraestructura · Publicación al broker MQTT',
+    domHtml: ``,
+    tests: [
+      {
+        id: 'TC-MQTT-01',
+        name: 'Retorna status OK tras publicar',
+        precondition: 'Logger mockeado',
+        action: 'Llamar a publish(topic, payload)',
+        expected: 'result.status === "OK"',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const logger = createMockFn();
+          const comm = new MQTTComm(logger, timers);
+          const p = comm.publish('gva/07/safety/emergency', { event: 'EMERGENCY_STOP' });
+          await timers.runAllTimers();
+          const result = await p;
+          a.expect(result.status).toBe('OK');
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-MQTT-02',
+        name: 'El topic se preserva en el resultado',
+        precondition: 'Logger mockeado',
+        action: 'Llamar a publish("gva/07/safety/emergency", {})',
+        expected: 'result.topic === "gva/07/safety/emergency"',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const logger = createMockFn();
+          const comm = new MQTTComm(logger, timers);
+          const p = comm.publish('gva/07/safety/emergency', { event: 'TEST' });
+          await timers.runAllTimers();
+          const result = await p;
+          a.expect(result.topic).toBe('gva/07/safety/emergency');
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-MQTT-03',
+        name: 'Logger invocado exactamente 3 veces',
+        precondition: 'Logger mockeado como spy',
+        action: 'Llamar a publish() y resolver timers',
+        expected: 'mockLogger._callCount === 3',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const logger = createMockFn();
+          const comm = new MQTTComm(logger, timers);
+          const p = comm.publish('gva/07/safety/test', {});
+          await timers.runAllTimers();
+          await p;
+          a.expect(logger).toHaveBeenCalledTimes(3);
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-MQTT-04',
+        name: 'Payload incluye unit "GVA-07" y sector "ALMACÉN-3"',
+        precondition: 'Logger mockeado',
+        action: 'Llamar a publish() y parsear result.packet',
+        expected: 'parsed.unit === "GVA-07" && parsed.sector === "ALMACÉN-3"',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const logger = createMockFn();
+          const comm = new MQTTComm(logger, timers);
+          const p = comm.publish('topic/test', { event: 'X' });
+          await timers.runAllTimers();
+          const result = await p;
+          const parsed = JSON.parse(result.packet);
+          a.expect(parsed.unit).toBe('GVA-07');
+          a.expect(parsed.sector).toBe('ALMACÉN-3');
+          return a.results;
+        }
+      }
+    ]
+  },
+  {
+    id: 'orch', name: 'SafetyOrchestrator',
+    description: 'Caso de uso central · Coordinación secuencial de capas',
+    domHtml: `<button id="btnStop"></button><button id="btnReset"></button><div id="led"></div><div id="ledStatus"></div><div id="stateDisplay">NORMAL</div><div id="metSpeed"></div><div id="metMotor"></div>`,
+    tests: [
+      {
+        id: 'TC-ORCH-01',
+        name: 'Ejecuta capas en orden HAL → STATE → MQTT',
+        precondition: 'Las tres capas mockeadas, callOrder = []',
+        action: 'Llamar a trigger() y resolver todos los timers',
+        expected: 'callOrder deepEquals ["HAL", "STATE", "MQTT"]',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const callOrder = [];
+          const hal   = { cortarEnergia: createMockFn(async () => { callOrder.push('HAL');   return { status: 'OK', relay: 'OPEN' }; }) };
+          const state  = { cambiarEstado: createMockFn(async () => { callOrder.push('STATE'); return { status: 'OK', state: 'EMERGENCY_STOP' }; }) };
+          const mqtt   = { publish:       createMockFn(async () => { callOrder.push('MQTT');  return { status: 'OK' }; }) };
+          const orch = new SafetyOrchestrator(hal, state, mqtt, doc, timers);
+          const p = orch.trigger();
+          await timers.runAllTimers();
+          await p;
+          a.expect(callOrder).toEqual(['HAL', 'STATE', 'MQTT']);
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-ORCH-02',
+        name: 'No se ejecuta dos veces si ya está corriendo',
+        precondition: 'Orquestador no bloqueado',
+        action: 'Llamar a trigger() dos veces sin resolver timers',
+        expected: 'hal.cortarEnergia llamado exactamente 1 vez',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const hal   = { cortarEnergia: createMockFn(async () => { return { status: 'OK', relay: 'OPEN' }; }) };
+          const state  = { cambiarEstado: createMockFn(async () => ({ status: 'OK', state: 'EMERGENCY_STOP' })) };
+          const mqtt   = { publish:       createMockFn(async () => ({ status: 'OK' })) };
+          const orch = new SafetyOrchestrator(hal, state, mqtt, doc, timers);
+          orch.trigger();
+          orch.trigger(); // segunda llamada — debe ignorarse
+          await timers.runAllTimers();
+          a.expect(hal.cortarEnergia).toHaveBeenCalledTimes(1);
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-ORCH-03',
+        name: 'Deshabilita el botón stop durante la secuencia',
+        precondition: '#btnStop habilitado',
+        action: 'Llamar a trigger() sin resolver timers aún',
+        expected: 'btnStop.disabled === true inmediatamente',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const hal   = { cortarEnergia: createMockFn(async () => ({ status: 'OK', relay: 'OPEN' })) };
+          const state  = { cambiarEstado: createMockFn(async () => ({ status: 'OK', state: 'EMERGENCY_STOP' })) };
+          const mqtt   = { publish:       createMockFn(async () => ({ status: 'OK' })) };
+          const orch = new SafetyOrchestrator(hal, state, mqtt, doc, timers);
+          const p = orch.trigger();
+          // Verificar ANTES de resolver timers
+          a.expect(doc.getElementById('btnStop').disabled).toBe(true);
+          await timers.runAllTimers();
+          await p;
+          return a.results;
+        }
+      },
+      {
+        id: 'TC-ORCH-04',
+        name: 'Botón reset visible al finalizar secuencia',
+        precondition: '#btnReset sin clase .visible',
+        action: 'Llamar a trigger() y resolver todos los timers',
+        expected: 'btnReset.classList.contains("visible") === true',
+        async run(doc, timers) {
+          const a = new Assertion();
+          const hal   = { cortarEnergia: createMockFn(async () => ({ status: 'OK', relay: 'OPEN' })) };
+          const state  = { cambiarEstado: createMockFn(async () => ({ status: 'OK', state: 'EMERGENCY_STOP' })) };
+          const mqtt   = { publish:       createMockFn(async () => ({ status: 'OK' })) };
+          const orch = new SafetyOrchestrator(hal, state, mqtt, doc, timers);
+          const p = orch.trigger();
+          await timers.runAllTimers();
+          await p;
+          a.expect(doc.getElementById('btnReset').classList.contains('visible')).toBe(true);
+          return a.results;
+        }
+      }
+    ]
+  }
+];
+
+// ═══════════════════════════════════════════════════════════
+//  TEST STATE
+// ═══════════════════════════════════════════════════════════
+const state = {
+  results: {}, // testId → { status, duration, assertions, error }
+  selected: null
+};
+
+// ═══════════════════════════════════════════════════════════
+//  SIDEBAR RENDERER
+// ═══════════════════════════════════════════════════════════
+function renderSidebar() {
+  const list = document.getElementById('suiteList');
+  list.innerHTML = '';
+  for (const suite of SUITES) {
+    const suiteTests = suite.tests;
+    const suiteResults = suiteTests.map(t => state.results[t.id]);
+    const allPass = suiteResults.every(r => r?.status === 'pass');
+    const anyFail = suiteResults.some(r => r?.status === 'fail');
+    const anyRunning = suiteResults.some(r => r?.status === 'running');
+    const dotClass = anyRunning ? 'running' : anyFail ? 'fail' : allPass && suiteResults.every(r=>r) ? 'pass' : '';
+
+    const group = document.createElement('div');
+    group.className = 'suite-group';
+
+    const header = document.createElement('div');
+    header.className = 'suite-name';
+    header.innerHTML = `<div class="suite-dot ${dotClass}"></div>${suite.name}
+      <span style="margin-left:auto;font-size:0.58rem;color:var(--text-dim)">${suiteResults.filter(r=>r?.status==='pass').length}/${suiteTests.length}</span>`;
+    header.onclick = () => Runner.runSuite(suite.id);
+    group.appendChild(header);
+
+    for (const test of suiteTests) {
+      const res = state.results[test.id];
+      const status = res?.status || 'pending';
+      const icon = { pass: '✓', fail: '✗', running: '<span class="spinning">⟳</span>', pending: '○' }[status] || '○';
+      const item = document.createElement('div');
+      item.className = `test-item ${status} ${state.selected === test.id ? 'active' : ''}`;
+      item.dataset.testId = test.id;
+      item.innerHTML = `<span class="test-icon">${icon}</span>${test.id}: ${test.name}`;
+      item.onclick = () => selectTest(test.id, suite.id);
+      group.appendChild(item);
+    }
+
+    list.appendChild(group);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DETAIL RENDERER
+// ═══════════════════════════════════════════════════════════
+function selectTest(testId, suiteId) {
+  state.selected = testId;
+  const suite = SUITES.find(s => s.id === suiteId || s.tests.some(t => t.id === testId));
+  const test = suite?.tests.find(t => t.id === testId);
+  if (!test) return;
+
+  const res = state.results[testId];
+  const status = res?.status || 'idle';
+
+  document.getElementById('detailTitle').textContent = `${testId} · ${test.name}`;
+  const badge = document.getElementById('detailBadge');
+  badge.textContent = status.toUpperCase();
+  badge.className = `detail-badge ${status === 'idle' ? 'idle' : status === 'pass' ? 'pass' : status === 'fail' ? 'fail' : 'pending'}`;
+
+  const body = document.getElementById('detailBody');
+
+  const domPreview = suite.domHtml
+    ? suite.domHtml.replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/&lt;(\w+)/g, '&lt;<span class="tag">$1</span>')
+        .replace(/(id|class|disabled)=/g, '<span class="attr">$1</span>=')
+        .replace(/="([^"]+)"/g, '="<span class="val">$1</span>"')
+    : '<em style="color:var(--text-dim)">Sin DOM requerido</em>';
+
+  const assertionsHtml = res?.assertions
+    ? res.assertions.map(a => `
+      <div class="assertion ${a.pass ? 'pass' : 'fail'}">
+        <span class="assertion-icon">${a.pass ? '<span style="color:var(--pass)">✓</span>' : '<span style="color:var(--fail)">✗</span>'}</span>
+        <span class="assertion-text">${a.desc}</span>
+      </div>`).join('')
+    : `<div class="assertion pending"><span class="assertion-icon">○</span><span class="assertion-text" style="color:var(--text-dim)">No ejecutado aún</span></div>`;
+
+  body.innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-label">Precondición</div>
+      <div class="detail-section-content">${test.precondition}</div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-label">Acción</div>
+      <div class="detail-section-content">${test.action}</div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-label">Resultado esperado</div>
+      <div class="detail-section-content"><code>${test.expected}</code></div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-label">DOM Sandbox (jsdom)</div>
+      <div class="dom-preview">${domPreview || '<em style="color:var(--text-dim)">Sin DOM</em>'}</div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-label">Assertions ${res ? `<span class="timing-pill">⏱ ${res.duration}ms</span>` : ''}</div>
+      <div class="assertion-list">${assertionsHtml}</div>
+    </div>
+    ${res?.error ? `<div class="detail-section"><div class="detail-section-label">Error</div><div class="error-block">${res.error}</div></div>` : ''}
+  `;
+
+  renderSidebar();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SCOREBOARD UPDATE
+// ═══════════════════════════════════════════════════════════
+function updateScoreboard() {
+  const all = Object.values(state.results);
+  const pass = all.filter(r => r.status === 'pass').length;
+  const fail = all.filter(r => r.status === 'fail').length;
+  const pending = 16 - pass - fail;
+
+  document.getElementById('scorePass').textContent = pass;
+  document.getElementById('scoreFail').textContent = fail;
+  document.getElementById('scorePending').textContent = pending;
+
+  const pct = (pass / 16) * 100;
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TEST RUNNER
+// ═══════════════════════════════════════════════════════════
+const Runner = {
+  async runSuite(suiteId) {
+    const suite = SUITES.find(s => s.id === suiteId);
+    if (!suite) return;
+    for (const test of suite.tests) {
+      await this.runTest(test, suite);
+    }
+  },
+
+  async runTest(test, suite) {
+    state.results[test.id] = { status: 'running', duration: 0, assertions: [], error: null };
+    if (state.selected === test.id) selectTest(test.id, suite.id);
+    renderSidebar();
+
+    const t0 = performance.now();
+    const doc = createSandbox(suite.domHtml);
+    const timers = createFakeTimers();
+
+    try {
+      const assertions = await test.run(doc, timers);
+      const duration = Math.round(performance.now() - t0);
+      state.results[test.id] = { status: 'pass', duration, assertions, error: null };
+    } catch(e) {
+      const duration = Math.round(performance.now() - t0);
+      // Collect partial assertions
+      const lastErr = e.message;
+      state.results[test.id] = {
+        status: 'fail', duration,
+        assertions: state.results[test.id]?.assertions || [],
+        error: lastErr
+      };
+    }
+
+    if (state.selected === test.id) selectTest(test.id, suite.id);
+    updateScoreboard();
+    renderSidebar();
+  },
+
+  async runAll() {
+    const btn = document.getElementById('runAllBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinning">⟳</span> Running...';
+
+    // Reset all
+    state.results = {};
+    updateScoreboard();
+    renderSidebar();
+
+    const t0 = performance.now();
+    for (const suite of SUITES) {
+      for (const test of suite.tests) {
+        await this.runTest(test, suite);
+        await new Promise(r => setTimeout(r, 30)); // small visual delay between tests
+      }
+    }
+
+    const total = Math.round(performance.now() - t0);
+    document.getElementById('scoreTime').textContent = total + 'ms';
+    btn.disabled = false;
+    btn.innerHTML = '▶ Run All';
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+renderSidebar();
+
+setInterval(() => {
+  document.getElementById('headerClock').textContent = new Date().toTimeString().split(' ')[0];
+}, 1000);
+</script>
+</body>
+</html>

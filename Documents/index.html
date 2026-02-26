@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GVA · Control de Emergencia</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;600;800&display=swap');
+
+  :root {
+    --bg:        #0a0c0f;
+    --panel:     #0f1318;
+    --border:    #1e2530;
+    --accent:    #00ffe0;
+    --red:       #ff2d2d;
+    --green:     #00ff88;
+    --yellow:    #ffd900;
+    --text:      #c8d6e5;
+    --text-dim:  #4a5568;
+    --font-mono: 'Share Tech Mono', monospace;
+    --font-main: 'Barlow Condensed', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-main);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Noise overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 999;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 28px;
+    border-bottom: 1px solid var(--border);
+    background: #080a0d;
+    flex-shrink: 0;
+  }
+  .logo {
+    font-family: var(--font-main);
+    font-weight: 800; font-size: 1.4rem;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: var(--accent);
+    text-shadow: 0 0 18px var(--accent);
+  }
+  .logo span { color: var(--text-dim); font-weight: 300; }
+  .header-right { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); text-align: right; line-height: 1.7; }
+  #clock { color: var(--accent); }
+
+  /* ── Main grid ── */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.4fr;
+    gap: 16px;
+    padding: 16px 24px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── Panel base ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+  .panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.4;
+  }
+  .panel-title {
+    font-family: var(--font-main); font-weight: 600;
+    font-size: 0.65rem; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 12px 18px 10px;
+    border-bottom: 1px solid var(--border);
+    background: #0c0f13;
+  }
+  .panel-body {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px 18px;
+    gap: 32px;
+  }
+
+  /* ── Emergency button ── */
+  .e-stop-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .e-stop-label {
+    font-family: var(--font-main); font-weight: 800;
+    font-size: 0.7rem; letter-spacing: 0.35em;
+    color: var(--red); text-transform: uppercase;
+  }
+  .e-stop-btn {
+    position: relative;
+    width: 150px; height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #ff5555, #cc0000 55%, #7a0000);
+    border: 4px solid #ff2d2d;
+    box-shadow:
+      0 0 0 6px #1a0000,
+      0 0 0 9px #3a0000,
+      0 0 30px rgba(255,45,45,0.5),
+      0 8px 30px rgba(0,0,0,0.8);
+    cursor: pointer;
+    transition: transform 0.08s, box-shadow 0.08s;
+    outline: none;
+    font-family: var(--font-main); font-weight: 800;
+    font-size: 1.05rem; letter-spacing: 0.12em;
+    color: #fff;
+    text-transform: uppercase;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1.2;
+  }
+  .e-stop-btn small { font-size: 0.65rem; font-weight: 300; letter-spacing: 0.2em; opacity: 0.85; }
+  .e-stop-btn:hover {
+    box-shadow:
+      0 0 0 6px #1a0000,
+      0 0 0 9px #3a0000,
+      0 0 50px rgba(255,45,45,0.8),
+      0 8px 40px rgba(0,0,0,0.8);
+  }
+  .e-stop-btn:active, .e-stop-btn.pressed {
+    transform: scale(0.93);
+    box-shadow:
+      0 0 0 6px #1a0000,
+      0 0 0 9px #3a0000,
+      0 0 20px rgba(255,45,45,0.4),
+      inset 0 3px 10px rgba(0,0,0,0.6);
+  }
+  .e-stop-btn:disabled {
+    cursor: not-allowed; opacity: 0.5;
+  }
+
+  /* Reset button */
+  .reset-btn {
+    font-family: var(--font-mono); font-size: 0.7rem;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-dim); padding: 6px 18px; border-radius: 3px;
+    cursor: pointer; letter-spacing: 0.15em; text-transform: uppercase;
+    transition: all 0.2s; display: none;
+  }
+  .reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .reset-btn.visible { display: block; }
+
+  /* ── Relay LED ── */
+  .relay-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .relay-label {
+    font-family: var(--font-mono); font-size: 0.68rem;
+    color: var(--text-dim); text-align: center; line-height: 1.6;
+  }
+  .led-container {
+    position: relative; width: 70px; height: 70px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .led-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.05);
+    animation: spin 8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .led {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 32%, #88ffcc, #00cc66 50%, #005533);
+    box-shadow: 0 0 16px var(--green), 0 0 40px rgba(0,255,136,0.4);
+    border: 2px solid rgba(255,255,255,0.15);
+    transition: background 0.4s, box-shadow 0.4s;
+    position: relative; z-index: 1;
+  }
+  .led.off {
+    background: radial-gradient(circle at 38% 32%, #ff7777, #cc2200 50%, #550000);
+    box-shadow: 0 0 16px var(--red), 0 0 40px rgba(255,45,45,0.35);
+  }
+  .led-status {
+    font-family: var(--font-mono); font-size: 0.62rem;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--green); transition: color 0.4s;
+  }
+  .led-status.off { color: var(--red); }
+
+  /* ── State display ── */
+  .state-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%;
+  }
+  .state-label {
+    font-family: var(--font-mono); font-size: 0.65rem;
+    letter-spacing: 0.3em; color: var(--text-dim); text-transform: uppercase;
+  }
+  .state-display {
+    font-family: var(--font-main); font-weight: 800;
+    font-size: 2.2rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--green); text-align: center;
+    padding: 16px 24px;
+    border: 1px solid rgba(0,255,136,0.2);
+    border-radius: 4px;
+    background: rgba(0,255,136,0.03);
+    width: 100%;
+    transition: color 0.4s, border-color 0.4s, background 0.4s;
+    min-height: 90px; display: flex; align-items: center; justify-content: center;
+  }
+  .state-display.emergency {
+    color: var(--red);
+    border-color: rgba(255,45,45,0.3);
+    background: rgba(255,45,45,0.04);
+    animation: blink 0.8s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0.25; } }
+
+  .state-metrics {
+    width: 100%; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .metric {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 4px; padding: 10px 14px;
+  }
+  .metric-name { font-family: var(--font-mono); font-size: 0.58rem; color: var(--text-dim); letter-spacing: 0.2em; text-transform: uppercase; }
+  .metric-val { font-family: var(--font-mono); font-size: 1rem; color: var(--accent); margin-top: 4px; }
+
+  /* ── Log Console ── */
+  .panel.log-panel { grid-column: 3; }
+
+  .log-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 14px;
+    background: #0a0d11;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .log-count {
+    font-family: var(--font-mono); font-size: 0.6rem;
+    color: var(--text-dim); letter-spacing: 0.15em;
+  }
+  .log-count span { color: var(--accent); }
+  .log-toolbar-actions { display: flex; gap: 8px; align-items: center; }
+  .log-btn {
+    font-family: var(--font-mono); font-size: 0.58rem;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-dim); padding: 3px 10px; border-radius: 2px;
+    cursor: pointer; letter-spacing: 0.12em; text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .log-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .log-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,255,224,0.06); }
+
+  .log-scroll-wrap {
+    flex: 1; position: relative; min-height: 0;
+    display: flex; flex-direction: column;
+  }
+  .log-body {
+    flex: 1; overflow-y: auto; padding: 10px 14px 10px 10px;
+    font-family: var(--font-mono); font-size: 0.72rem;
+    line-height: 1.85;
+    background: #080a0d;
+    scroll-behavior: smooth;
+    min-height: 0;
+  }
+  .log-body::-webkit-scrollbar { width: 6px; }
+  .log-body::-webkit-scrollbar-track { background: #080a0d; }
+  .log-body::-webkit-scrollbar-thumb { background: #1e2530; border-radius: 3px; }
+  .log-body::-webkit-scrollbar-thumb:hover { background: #2e3a4a; }
+
+  /* Scroll progress bar on the right */
+  .log-progress-track {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 3px;
+    background: rgba(255,255,255,0.03); pointer-events: none;
+  }
+  .log-progress-thumb {
+    width: 100%; background: var(--accent); opacity: 0.5;
+    border-radius: 2px; position: absolute; top: 0;
+    transition: top 0.08s, height 0.08s;
+    min-height: 20px;
+  }
+
+  /* Jump to bottom button */
+  .log-jump-btn {
+    position: absolute; bottom: 10px; right: 12px;
+    background: rgba(0,255,224,0.1); border: 1px solid rgba(0,255,224,0.4);
+    color: var(--accent); border-radius: 3px;
+    font-family: var(--font-mono); font-size: 0.6rem;
+    padding: 4px 10px; cursor: pointer;
+    letter-spacing: 0.1em;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+    z-index: 10;
+  }
+  .log-jump-btn.show { opacity: 1; pointer-events: auto; }
+  .log-jump-btn:hover { background: rgba(0,255,224,0.2); }
+
+  /* Top fade when scrolled */
+  .log-scroll-wrap::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 6px; height: 30px;
+    background: linear-gradient(to bottom, #080a0d, transparent);
+    pointer-events: none; z-index: 5;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .log-scroll-wrap.scrolled::before { opacity: 1; }
+  .log-entry { display: flex; gap: 10px; padding: 2px 0; }
+  .log-entry .ts { color: #334155; flex-shrink: 0; }
+  .log-entry .src { flex-shrink: 0; }
+  .log-entry .msg { color: var(--text); }
+  .src-hal    { color: #7c6ee6; }
+  .src-state  { color: var(--yellow); }
+  .src-mqtt   { color: #38bdf8; }
+  .src-orch   { color: var(--accent); }
+  .src-sys    { color: var(--text-dim); }
+  .msg-ok     { color: var(--green) !important; }
+  .msg-err    { color: var(--red) !important; }
+  .msg-warn   { color: var(--yellow) !important; }
+  .cursor-blink {
+    display: inline-block; width: 8px; height: 13px;
+    background: var(--accent); margin-left: 4px;
+    vertical-align: middle;
+    animation: blink 0.9s step-end infinite;
+  }
+
+  /* ── Footer ── */
+  footer {
+    padding: 7px 24px;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 0.6rem;
+    color: var(--text-dim);
+    display: flex; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  footer span { color: var(--accent); }
+
+  /* ── Scanline effect ── */
+  @keyframes scanline {
+    0%   { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+  }
+  body::after {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(0,255,224,0.04);
+    pointer-events: none; z-index: 998;
+    animation: scanline 6s linear infinite;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GVA <span>·</span> CONTROL SYS</div>
+  <div class="header-right">
+    <div>UNIDAD: GVA-07 &nbsp;|&nbsp; SECTOR: ALMACÉN-3</div>
+    <div id="clock">--:--:--</div>
+  </div>
+</header>
+
+<main>
+  <!-- Panel 1: Hardware -->
+  <div class="panel">
+    <div class="panel-title">Panel Físico · Hardware</div>
+    <div class="panel-body">
+      <div class="e-stop-wrap">
+        <div class="e-stop-label">⚠ Activación de Emergencia</div>
+        <button class="e-stop-btn" id="btnStop" onclick="SafetyOrchestrator.trigger()">
+          PARO<br><small>EMERGENCIA</small>
+        </button>
+        <button class="reset-btn" id="btnReset" onclick="SystemReset.run()">↺ Restablecer Sistema</button>
+      </div>
+
+      <div class="relay-wrap">
+        <div class="relay-label">RELÉ DE POTENCIA<br>DEL MOTOR</div>
+        <div class="led-container">
+          <div class="led-ring"></div>
+          <div class="led" id="led"></div>
+        </div>
+        <div class="led-status" id="ledStatus">CONECTADO</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel 2: Estado -->
+  <div class="panel">
+    <div class="panel-title">Estado del Sistema · Domain</div>
+    <div class="panel-body">
+      <div class="state-wrap">
+        <div class="state-label">Estado Actual</div>
+        <div class="state-display" id="stateDisplay">NORMAL</div>
+        <div class="state-metrics">
+          <div class="metric">
+            <div class="metric-name">Velocidad</div>
+            <div class="metric-val" id="metSpeed">12.4 km/h</div>
+          </div>
+          <div class="metric">
+            <div class="metric-name">Motor</div>
+            <div class="metric-val" id="metMotor">ACTIVO</div>
+          </div>
+          <div class="metric">
+            <div class="metric-name">Batería</div>
+            <div class="metric-val" id="metBattery">84%</div>
+          </div>
+          <div class="metric">
+            <div class="metric-name">Temp.</div>
+            <div class="metric-val" id="metTemp">42°C</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel 3: Log MQTT -->
+  <div class="panel log-panel">
+    <div class="panel-title">Consola de Registros · MQTT Broker</div>
+    <div class="log-toolbar">
+      <div class="log-count">EVENTOS: <span id="logCount">0</span></div>
+      <div class="log-toolbar-actions">
+        <button class="log-btn active" id="btnAutoScroll" onclick="LogController.toggleAutoScroll()">⬇ AUTO</button>
+        <button class="log-btn" onclick="LogController.scrollToTop()">⬆ INICIO</button>
+        <button class="log-btn" onclick="LogController.clear()">✕ LIMPIAR</button>
+      </div>
+    </div>
+    <div class="log-scroll-wrap" id="logScrollWrap">
+      <div class="log-body" id="logConsole">
+        <div class="log-entry">
+          <span class="ts">--:--:--.---</span>
+          <span class="src src-sys">[SYS]</span>
+          <span class="msg">Consola inicializada. Esperando eventos...</span>
+        </div>
+        <span class="cursor-blink"></span>
+      </div>
+      <div class="log-progress-track">
+        <div class="log-progress-thumb" id="logProgressThumb"></div>
+      </div>
+      <button class="log-jump-btn" id="logJumpBtn" onclick="LogController.scrollToBottom()">▼ IR AL FINAL</button>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div>GVA Control System v3.1.2 · Clean Architecture Demo</div>
+  <div>MQTT Broker: <span>mqtt://broker.gva-local:1883</span> · Topic: <span>gva/07/safety</span></div>
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  LOG CONTROLLER
+// ═══════════════════════════════════════════════════
+const LogController = {
+  autoScroll: true,
+  entryCount: 0,
+
+  toggleAutoScroll() {
+    this.autoScroll = !this.autoScroll;
+    const btn = $('btnAutoScroll');
+    btn.classList.toggle('active', this.autoScroll);
+    if (this.autoScroll) this.scrollToBottom();
+  },
+
+  scrollToBottom() {
+    const el = $('logConsole');
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  },
+
+  scrollToTop() {
+    const el = $('logConsole');
+    el.scrollTo({ top: 0, behavior: 'smooth' });
+  },
+
+  clear() {
+    const el = $('logConsole');
+    el.innerHTML = '<span class="cursor-blink"></span>';
+    this.entryCount = 0;
+    $('logCount').textContent = '0';
+    this.updateScrollUI();
+  },
+
+  updateScrollUI() {
+    const el = $('logConsole');
+    const wrap = $('logScrollWrap');
+    const thumb = $('logProgressThumb');
+    const jumpBtn = $('logJumpBtn');
+
+    const scrollable = el.scrollHeight - el.clientHeight;
+    const scrolled = scrollable > 0 ? el.scrollTop / scrollable : 1;
+    const atBottom = scrollable <= 0 || el.scrollTop >= scrollable - 4;
+
+    // Progress thumb
+    if (scrollable > 0) {
+      const trackH = el.clientHeight;
+      const thumbH = Math.max(20, (el.clientHeight / el.scrollHeight) * trackH);
+      const thumbTop = scrolled * (trackH - thumbH);
+      thumb.style.height = thumbH + 'px';
+      thumb.style.top = thumbTop + 'px';
+      thumb.style.opacity = '0.5';
+    } else {
+      thumb.style.opacity = '0';
+    }
+
+    // Top fade
+    wrap.classList.toggle('scrolled', el.scrollTop > 10);
+
+    // Jump button
+    jumpBtn.classList.toggle('show', !atBottom && scrollable > 60);
+  }
+};
+
+// ═══════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+
+function timestamp() {
+  const n = new Date();
+  return n.toTimeString().split(' ')[0] + '.' + String(n.getMilliseconds()).padStart(3,'0');
+}
+
+function addLog(source, cssClass, msg, msgClass = '') {
+  const console = $('logConsole');
+  const cursor = console.querySelector('.cursor-blink');
+  if (cursor) cursor.remove();
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.style.opacity = '0';
+  entry.style.transform = 'translateX(-6px)';
+  entry.style.transition = 'opacity 0.2s, transform 0.2s';
+  entry.innerHTML = `
+    <span class="ts">${timestamp()}</span>
+    <span class="src ${cssClass}">${source}</span>
+    <span class="msg ${msgClass}">${msg}</span>
+  `;
+  console.appendChild(entry);
+
+  // Animate in
+  requestAnimationFrame(() => {
+    entry.style.opacity = '1';
+    entry.style.transform = 'translateX(0)';
+  });
+
+  // Re-add cursor
+  const cur = document.createElement('span');
+  cur.className = 'cursor-blink';
+  console.appendChild(cur);
+
+  // Update counter
+  LogController.entryCount++;
+  $('logCount').textContent = LogController.entryCount;
+
+  // Auto-scroll
+  if (LogController.autoScroll) {
+    console.scrollTop = console.scrollHeight;
+  }
+
+  LogController.updateScrollUI();
+}
+
+// Scroll event listener (will be set after DOM ready)
+window.addEventListener('DOMContentLoaded', () => {
+  const el = $('logConsole');
+  el.addEventListener('scroll', () => {
+    LogController.updateScrollUI();
+    // Detect manual scroll up → disable auto-scroll
+    const scrollable = el.scrollHeight - el.clientHeight;
+    const atBottom = el.scrollTop >= scrollable - 8;
+    if (!atBottom && LogController.autoScroll) {
+      LogController.autoScroll = false;
+      $('btnAutoScroll').classList.remove('active');
+    } else if (atBottom && !LogController.autoScroll) {
+      LogController.autoScroll = true;
+      $('btnAutoScroll').classList.add('active');
+    }
+  });
+});
+
+function delay(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+// ═══════════════════════════════════════════════════
+//  MOTOR HAL  (Hardware Abstraction Layer)
+// ═══════════════════════════════════════════════════
+const MotorHAL = {
+  cortarEnergia() {
+    addLog('[HAL]', 'src-hal', 'Enviando señal CORTE al controlador de potencia...', '');
+    return delay(350).then(() => {
+      // Actualizar LED
+      $('led').classList.add('off');
+      $('ledStatus').classList.add('off');
+      $('ledStatus').textContent = 'DESCONECTADO';
+      // Actualizar métricas
+      $('metSpeed').textContent = '0.0 km/h';
+      $('metMotor').textContent = 'INACTIVO';
+      $('metMotor').style.color = 'var(--red)';
+      addLog('[HAL]', 'src-hal', 'Relé de potencia ABIERTO. Energía cortada.', 'msg-ok');
+      return { status: 'OK', relay: 'OPEN', timestamp: timestamp() };
+    });
+  }
+};
+
+// ═══════════════════════════════════════════════════
+//  STATE MANAGER
+// ═══════════════════════════════════════════════════
+const StateManager = {
+  currentState: 'NORMAL',
+
+  cambiarEstado(newState) {
+    addLog('[STATE]', 'src-state', `Transición de estado: ${this.currentState} → ${newState}`, '');
+    return delay(300).then(() => {
+      this.currentState = newState;
+      const display = $('stateDisplay');
+      display.textContent = newState;
+      if (newState === 'EMERGENCY_STOP') {
+        display.classList.add('emergency');
+        addLog('[STATE]', 'src-state', `Estado del dominio actualizado a: ${newState}`, 'msg-err');
+      } else {
+        display.classList.remove('emergency');
+        addLog('[STATE]', 'src-state', `Estado del dominio restaurado a: ${newState}`, 'msg-ok');
+      }
+      return { status: 'OK', state: newState };
+    });
+  }
+};
+
+// ═══════════════════════════════════════════════════
+//  MQTT COMMUNICATOR
+// ═══════════════════════════════════════════════════
+const MQTTComm = {
+  publish(topic, payload) {
+    addLog('[MQTT]', 'src-mqtt', `Conectando a broker mqtt://broker.gva-local:1883...`, '');
+    return delay(400).then(() => {
+      const packet = JSON.stringify({ ...payload, ts: timestamp(), unit: 'GVA-07', sector: 'ALMACÉN-3' });
+      addLog('[MQTT]', 'src-mqtt', `PUBLISH → ${topic}`, '');
+      addLog('[MQTT]', 'src-mqtt', `Payload: ${packet}`, 'msg-warn');
+      addLog('[MQTT]', 'src-mqtt', `✓ Mensaje publicado. ACK recibido del broker.`, 'msg-ok');
+      return { status: 'OK', topic, packet };
+    });
+  }
+};
+
+// ═══════════════════════════════════════════════════
+//  SAFETY ORCHESTRATOR  (Caso de Uso Central)
+// ═══════════════════════════════════════════════════
+const SafetyOrchestrator = {
+  running: false,
+
+  async trigger() {
+    if (this.running) return;
+    this.running = true;
+
+    const btn = $('btnStop');
+    btn.disabled = true;
+    btn.classList.add('pressed');
+
+    addLog('[ORCH]', 'src-orch', '══ SECUENCIA DE PARO DE EMERGENCIA INICIADA ══', 'msg-err');
+    addLog('[ORCH]', 'src-orch', 'Paso 1/3 → Corte de energía vía MotorHAL', '');
+
+    // Paso 1: HAL
+    const halResult = await MotorHAL.cortarEnergia();
+    addLog('[ORCH]', 'src-orch', `HAL retornó: ${JSON.stringify(halResult)}`, '');
+    await delay(200);
+
+    // Paso 2: StateManager
+    addLog('[ORCH]', 'src-orch', 'Paso 2/3 → Actualización de estado vía StateManager', '');
+    const stateResult = await StateManager.cambiarEstado('EMERGENCY_STOP');
+    addLog('[ORCH]', 'src-orch', `StateManager retornó: ${JSON.stringify(stateResult)}`, '');
+    await delay(200);
+
+    // Paso 3: MQTT
+    addLog('[ORCH]', 'src-orch', 'Paso 3/3 → Notificación vía MQTTComm', '');
+    const mqttResult = await MQTTComm.publish('gva/07/safety/emergency', {
+      event: 'EMERGENCY_STOP',
+      trigger: 'MANUAL_BUTTON',
+      halStatus: halResult.relay,
+      state: stateResult.state
+    });
+
+    await delay(300);
+    addLog('[ORCH]', 'src-orch', '══ PARO DE EMERGENCIA COMPLETADO EXITOSAMENTE ══', 'msg-err');
+    addLog('[SYS]', 'src-sys', 'Sistema en modo seguro. Esperando acción de operador.', '');
+
+    // Mostrar botón de reset
+    $('btnReset').classList.add('visible');
+    btn.classList.remove('pressed');
+  }
+};
+
+// ═══════════════════════════════════════════════════
+//  SYSTEM RESET
+// ═══════════════════════════════════════════════════
+const SystemReset = {
+  async run() {
+    addLog('[SYS]', 'src-sys', '── Iniciando secuencia de restablecimiento... ──', 'msg-warn');
+    await delay(300);
+
+    // Restaurar LED
+    $('led').classList.remove('off');
+    $('ledStatus').classList.remove('off');
+    $('ledStatus').textContent = 'CONECTADO';
+
+    // Restaurar métricas
+    $('metSpeed').textContent = '12.4 km/h';
+    $('metMotor').textContent = 'ACTIVO';
+    $('metMotor').style.color = 'var(--accent)';
+
+    // Restaurar estado
+    await StateManager.cambiarEstado('NORMAL');
+
+    await MQTTComm.publish('gva/07/safety/restore', {
+      event: 'SYSTEM_RESTORED',
+      trigger: 'OPERATOR_MANUAL'
+    });
+
+    addLog('[SYS]', 'src-sys', '── Sistema restablecido correctamente ──', 'msg-ok');
+
+    // Restaurar botón
+    const btn = $('btnStop');
+    btn.disabled = false;
+    SafetyOrchestrator.running = false;
+    $('btnReset').classList.remove('visible');
+  }
+};
+
+// ═══════════════════════════════════════════════════
+//  RELOJ EN TIEMPO REAL
+// ═══════════════════════════════════════════════════
+setInterval(() => {
+  $('clock').textContent = new Date().toTimeString().split(' ')[0];
+}, 1000);
+
+// ── Log inicial ──
+setTimeout(() => {
+  addLog('[SYS]', 'src-sys', 'GVA-07 conectado. Estado: NORMAL. Todos los sistemas operativos.', 'msg-ok');
+  addLog('[MQTT]', 'src-mqtt', 'Suscrito a: gva/07/safety/#', '');
+  addLog('[HAL]', 'src-hal', 'MotorHAL listo. Relé de potencia: CERRADO.', 'msg-ok');
+  addLog('[STATE]', 'src-state', 'StateManager inicializado. Estado: NORMAL.', 'msg-ok');
+  addLog('[ORCH]', 'src-orch', 'SafetyOrchestrator en espera. Sistema listo.', '');
+}, 600);
+</script>
+</body>
+</html>
